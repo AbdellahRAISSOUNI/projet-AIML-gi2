@@ -5,6 +5,8 @@ import joblib
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
+import requests
+import json
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
@@ -26,7 +28,22 @@ Cette application permet de prédire le revenu annuel d'un individu au Maroc
 en fonction de ses caractéristiques socio-économiques et démographiques.
 """)
 
-# Function to train a simple model if none exists
+# Configuration for API
+API_URL = "http://localhost:8000"  # URL when running locally
+# For deployed version, we'll use an environment variable or configure based on deployment
+if os.environ.get("DEPLOYED") == "true":
+    # This will be set in the deployment environment
+    API_URL = os.environ.get("API_URL", "https://your-fastapi-deployment-url.com")
+
+# Check if API is available
+def check_api_availability():
+    try:
+        response = requests.get(f"{API_URL}/health", timeout=2)
+        return response.status_code == 200
+    except:
+        return False
+
+# Function to train a simple model if none exists (fallback if API not available)
 @st.cache_resource
 def train_simple_model():
     with st.spinner("Aucun modèle trouvé. Entraînement d'un modèle simple en cours..."):
@@ -73,7 +90,7 @@ def train_simple_model():
             st.error(f"Une erreur s'est produite lors de l'entraînement du modèle: {str(e)}")
             return None
 
-# Function to load the best model
+# Function to load the best model (fallback if API not available)
 @st.cache_resource
 def load_model():
     # Check which models are available
@@ -182,26 +199,62 @@ def load_data():
         
         return df
 
-# Function to make predictions
-def predict_income(model, input_data):
+# Function to make predictions via API
+def predict_via_api(input_data):
+    try:
+        response = requests.post(
+            f"{API_URL}/predict",
+            json=input_data,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error(f"Erreur de l'API: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        st.error(f"Erreur de connexion à l'API: {str(e)}")
+        return None
+
+# Function to make predictions locally (fallback)
+def predict_income_locally(model, input_data):
     # Convert input data to DataFrame
     input_df = pd.DataFrame([input_data])
     
     # Make prediction
     prediction = model.predict(input_df)[0]
     
-    return prediction
+    return {
+        "revenu_annuel": float(prediction),
+        "revenu_mensuel": float(prediction) / 12,
+        "contexte": {
+            "smig_mensuel": 2828.71
+        }
+    }
 
 # Main function
 def main():
-    # Load the model and data
-    model_tuple = load_model()
+    # Check if API is available
+    is_api_available = check_api_availability()
+    
+    if is_api_available:
+        st.sidebar.success("✅ API connectée")
+        st.sidebar.info(f"URL de l'API: {API_URL}")
+        model_name = "API FastAPI"
+    else:
+        st.sidebar.warning("⚠️ API non disponible - Mode local utilisé")
+        # Load local model as fallback
+        model_tuple = load_model()
+        if model_tuple is None:
+            return
+        model, model_name = model_tuple
+    
+    # Load data for statistics display
     data = load_data()
-    
-    if model_tuple is None or data is None:
+    if data is None:
         return
-    
-    model, model_name = model_tuple
     
     # Sidebar for navigation
     st.sidebar.title("Navigation")
@@ -299,38 +352,56 @@ def main():
         if st.button("Prédire le revenu"):
             with st.spinner("Calcul en cours..."):
                 try:
-                    prediction = predict_income(model, input_data)
+                    # Make prediction
+                    if is_api_available:
+                        # Use API for prediction
+                        prediction_result = predict_via_api(input_data)
+                    else:
+                        # Use local model as fallback
+                        prediction_result = predict_income_locally(model, input_data)
                     
-                    st.success(f"### Revenu annuel prédit: **{prediction:,.2f} DH**")
-                    
-                    # Show additional context
-                    st.info(f"""
-                    #### Contexte:
-                    - Revenu mensuel estimé: **{prediction/12:,.2f} DH**
-                    - Salaire minimum au Maroc (SMIG): ~2,828.71 DH/mois
-                    """)
-                    
-                    # Create gauge chart for visualization
-                    fig, ax = plt.subplots(figsize=(10, 2))
-                    
-                    # Get statistics from the dataset for context
-                    min_income = data['revenu_annuel'].min()
-                    max_income = data['revenu_annuel'].max()
-                    mean_income = data['revenu_annuel'].mean()
-                    
-                    # Create a gauge-like visualization
-                    ax.barh(['Revenu'], [max_income], color='lightgray')
-                    ax.barh(['Revenu'], [prediction], color='green')
-                    
-                    # Add reference lines
-                    ax.axvline(x=mean_income, color='blue', linestyle='--', alpha=0.7)
-                    ax.text(mean_income, 0, f'Moyenne: {mean_income:,.0f} DH', rotation=90, verticalalignment='bottom')
-                    
-                    # Format the chart
-                    ax.set_xlim(0, max_income * 1.1)
-                    ax.set_title('Position du revenu prédit par rapport à la distribution')
-                    
-                    st.pyplot(fig)
+                    if prediction_result:
+                        prediction = prediction_result["revenu_annuel"]
+                        
+                        st.success(f"### Revenu annuel prédit: **{prediction:,.2f} DH**")
+                        
+                        # Show additional context
+                        st.info(f"""
+                        #### Contexte:
+                        - Revenu mensuel estimé: **{prediction/12:,.2f} DH**
+                        - Salaire minimum au Maroc (SMIG): ~2,828.71 DH/mois
+                        """)
+                        
+                        # Create gauge chart for visualization
+                        fig, ax = plt.subplots(figsize=(10, 2))
+                        
+                        # Get statistics from the dataset for context
+                        min_income = data['revenu_annuel'].min()
+                        max_income = data['revenu_annuel'].max()
+                        mean_income = data['revenu_annuel'].mean()
+                        
+                        # Create a gauge-like visualization
+                        ax.barh(['Revenu'], [max_income], color='lightgray')
+                        ax.barh(['Revenu'], [prediction], color='green')
+                        
+                        # Add reference lines
+                        ax.axvline(x=mean_income, color='blue', linestyle='--', alpha=0.7)
+                        ax.text(mean_income, 0, f'Moyenne: {mean_income:,.0f} DH', rotation=90, verticalalignment='bottom')
+                        
+                        # Format the chart
+                        ax.set_xlim(0, max_income * 1.1)
+                        ax.set_title('Position du revenu prédit par rapport à la distribution')
+                        
+                        st.pyplot(fig)
+                        
+                        # If we have detailed context from API, show it
+                        if "contexte" in prediction_result and is_api_available:
+                            with st.expander("Détails supplémentaires"):
+                                ctx = prediction_result["contexte"]
+                                st.write(f"- Revenu minimum dans le dataset: {ctx.get('revenu_min', 0):,.2f} DH")
+                                st.write(f"- Revenu maximum dans le dataset: {ctx.get('revenu_max', 0):,.2f} DH")
+                                st.write(f"- Revenu moyen dans le dataset: {ctx.get('revenu_moyen', 0):,.2f} DH")
+                                st.write(f"- Revenu médian dans le dataset: {ctx.get('revenu_median', 0):,.2f} DH")
                     
                 except Exception as e:
                     st.error(f"Une erreur s'est produite lors de la prédiction: {str(e)}")
@@ -338,7 +409,26 @@ def main():
     elif page == "Informations sur le modèle":
         st.header("Informations sur le modèle")
         
-        st.subheader(f"Modèle actuel: {model_name}")
+        if is_api_available:
+            st.subheader("Architecture")
+            st.write("""
+            Cette application utilise une architecture client-serveur:
+            
+            1. **API FastAPI**: Un service backend qui héberge le modèle de prédiction
+            2. **Interface Streamlit**: Une interface utilisateur qui communique avec l'API
+            
+            Cette approche offre plusieurs avantages:
+            - Séparation des préoccupations (model serving vs interface utilisateur)
+            - Possibilité d'utiliser le même modèle pour d'autres applications
+            - Meilleure scalabilité et gestion des ressources
+            """)
+            
+            # Simple diagram
+            col1, col2, col3 = st.columns([1,3,1])
+            with col2:
+                st.image("https://mermaid.ink/img/pako:eNpVkE9PwzAMxb9K5HNpcANpoJyQYAdOsMMOu1SukzaC_lG9ZGOo352WtlScnHz-PSVPJ2MdIUGXj4Pjw4FNNpbTkMOyG-0U8_vCrA6Dp2D5S_w7c3RyDdN-5FVnAqfdmqp9d1Tl2I-JazCwJzs4vtXYWXvnMB9Zql5DhpKdhg11r-_yXqJf1wj8-0qSPLMdyhv_XrICsdVeGHFB-lE7GmKs8O9fgV7JDZWRvXVY48t_X3w6ZqjQlXfHrpZniBdDBUuMfHkiKLWpSaBD1qk2okyqMlWNMLXeFGWhpcLpLu-EZZEX1ar5VrdlnWOCJlEKKgVFXQsimoQ6LE6nX8sUczc?type=png", caption="Architecture simplifiée du système")
+            
+        st.subheader(f"Modèle utilisé: {model_name}")
         
         # Try to load model performance data
         try:
