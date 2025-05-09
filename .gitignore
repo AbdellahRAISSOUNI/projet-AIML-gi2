@@ -1,0 +1,46 @@
+.qodo
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution/packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+env_projet_ia/
+env/
+venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Large model files
+*.pkl
+*.joblib
+*.pickle
+
+# Large datasets (if needed, can be regenerated)
+# Uncomment if you want to exclude these
+# dataset_revenu_marocains.csv
+# cleaned_dataset_revenu_marocains.csv
+
+# Streamlit specific
+.streamlit/
+
+# Large HTML reports
+rapport_analyse_exploratoire.html
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
