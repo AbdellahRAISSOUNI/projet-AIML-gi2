@@ -38,9 +38,11 @@ if os.environ.get("DEPLOYED") == "true":
 # Check if API is available
 def check_api_availability():
     try:
-        response = requests.get(f"{API_URL}/health", timeout=2)
+        response = requests.get(f"{API_URL}/health", timeout=5)  # Increased timeout
+        print(f"API response: {response.status_code}")  # Debug print
         return response.status_code == 200
-    except:
+    except Exception as e:
+        print(f"API connection error: {str(e)}")  # Debug print
         return False
 
 # Function to train a simple model if none exists (fallback if API not available)
