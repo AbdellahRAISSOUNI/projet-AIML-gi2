@@ -90,3 +90,76 @@ Ce projet est disponible sous licence MIT.
 ## Auteurs
 
 - [Nom de l'auteur] 
+
+## Déploiement du Projet
+
+### Option 1: Déploiement sur Streamlit Cloud (Recommandé)
+
+1. Assurez-vous que votre code est déjà poussé sur GitHub (fait avec le script push_to_github.bat)
+2. Visitez [Streamlit Cloud](https://streamlit.io/cloud)
+3. Connectez-vous avec votre compte GitHub
+4. Cliquez sur "New app"
+5. Sélectionnez votre dépôt `projet-AIML-gi2`
+6. Configurez l'application:
+   - Branch: main ou master
+   - Main file path: app.py
+   - Cliquez sur "Deploy!"
+
+L'application sera déployée et accessible via une URL publique.
+
+### Option 2: Déploiement local
+
+1. Clonez le dépôt:
+   ```
+   git clone https://github.com/AbdellahRAISSOUNI/projet-AIML-gi2.git
+   cd projet-AIML-gi2
+   ```
+
+2. Créez un environnement virtuel:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # Sur Windows: venv\Scripts\activate
+   ```
+
+3. Installez les dépendances:
+   ```
+   pip install -r requirements.txt
+   ```
+
+4. Lancez l'application:
+   ```
+   streamlit run app.py
+   ```
+
+### Option 3: Déploiement sur Heroku
+
+1. Créez un compte sur [Heroku](https://www.heroku.com/)
+2. Installez le [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli)
+3. Créez un fichier `Procfile` avec le contenu:
+   ```
+   web: sh setup.sh && streamlit run app.py
+   ```
+4. Créez un fichier `setup.sh` avec le contenu:
+   ```
+   mkdir -p ~/.streamlit/
+   echo "[server]
+   headless = true
+   port = $PORT
+   enableCORS = false
+   " > ~/.streamlit/config.toml
+   ```
+5. Ajoutez et poussez vers Heroku:
+   ```
+   heroku login
+   heroku create votre-app-name
+   git add .
+   git commit -m "Configuration pour Heroku"
+   git push heroku master
+   ```
+
+### Option 4: Déploiement sur un VPS (Digital Ocean, AWS EC2, etc.)
+
+1. Provisionnez un serveur avec Ubuntu
+2. Installez Python et les dépendances
+3. Clonez le dépôt
+4. Configurez un service systemd ou utilisez [nginx avec gunicorn et streamlit](https://discuss.streamlit.io/t/how-to-use-streamlit-in-docker/1067) 
